@@ -20,7 +20,7 @@ npx skills add <your-username>/fynd-extension-best-practices --skill fynd-extens
 Replace `<your-username>` with your GitHub username. Example:
 
 ```bash
-npx skills add darshak3112/fynd-extension-best-practices --skill fynd-extension
+npx skills add mridul/fynd-extension-best-practices --skill fynd-extension
 ```
 
 ## How it's useful
@@ -29,12 +29,6 @@ npx skills add darshak3112/fynd-extension-best-practices --skill fynd-extension
 - **For AI agents (Cursor, Claude Code, etc.):** Description triggers on "Fynd extension," "FDK," "webhooks," "partner panel"; SKILL.md and references keep answers aligned with FDK and extension layout.
 - **For onboarding:** Reference docs cover FDK setup, webhooks (inbound/outbound), and patterns by type (catalog, custom, platform-scoped).
 
-## Difference from fynd-theme-best-practices
-
-| Skill | Scope |
-|-------|--------|
-| **fynd-extension** (this repo) | Extension **backend** and **partner panel** — Express, webhooks, FDK server-side. |
-| [fynd-theme-best-practices](https://skills.sh/darshak3112/fynd-theme-best-practices/fynd-theme-best-practices) | **Storefront/theme** — React, sections, GraphQL, FDK theme development. |
 
 Use this skill when editing extension APIs or webhooks; use fynd-theme-best-practices for theme/storefront work.
 
