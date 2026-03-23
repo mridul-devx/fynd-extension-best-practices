@@ -1,27 +1,32 @@
 # Webhooks — Rules and context
 
-Use these rules when adding or changing webhook handling (Fynd → extension or external → extension). They give the AI the context needed to suggest correct behavior.
+Rules for webhook handling in both directions: Fynd→extension (outbound) and external→extension (inbound).
 
-## Rules: Fynd → extension (outbound)
+## Fynd → extension (outbound)
 
-1. **Registration:** Every Fynd webhook event the extension handles must be listed in `webhook_config.event_map` with `{ handler, version }`. The path in `webhook_config.api_path` must be mounted in the server and must call `fdkExtension.webhookRegistry.processWebhook(req)` and return 200 on success. Do not register events without a handler; do not mount the webhook path after `fdkHandler`.
+1. **Registration:** Every handled event must be in `webhook_config.event_map` with `{ handler, version }`. The `webhook_config.api_path` must match the mounted route that calls `webhookRegistry.processWebhook(req)`.
 
-2. **Handler signature:** Every event handler must have exactly the signature `(event_name, request_body, company_id, application_id)`. Use `company_id` and `application_id` for all DB writes and API calls inside the handler; do not ignore them or use global state for company scope.
+2. **Handler signature:** `(event_name, request_body, company_id, application_id)` — use all four arguments. Scope DB writes and API calls by `company_id` and `application_id`.
 
-3. **Non-blocking:** Do not perform long-running or blocking work inside the handler before responding. If work is heavy, acknowledge the webhook and process asynchronously so Fynd receives a timely 200.
+3. **Error boundary:** Catch all errors inside the handler. Log failures but do not throw — Fynd expects a timely 200. Unhandled throws may trigger retries and duplicate processing. See [error-handling.md](error-handling.md) for the pattern.
 
-4. **Event names and payloads:** They depend on the extension type. When adding or debugging a webhook, refer to Fynd Partner docs for the correct event name and payload shape; do not assume event names or payload structure without documentation.
+4. **Non-blocking:** If work is heavy (API calls, large DB writes), acknowledge the webhook immediately and process asynchronously via a job queue.
 
-## Rules: External service → extension (inbound)
+5. **Event names and payloads:** Depend on extension type. Always refer to Fynd Partner docs for correct event names and payload shapes.
 
-1. **Mount before FDK:** Any route that receives POST callbacks from an external system must be mounted **before** `app.use("/", fdkExtension.fdkHandler)`. Otherwise the FDK catch-all will handle the request and the webhook handler will never run.
+## External → extension (inbound)
 
-2. **Resolve companyId first:** Before calling any Fynd API from an inbound webhook handler, resolve `companyId` from the request (payload, header, or DB lookup). If `companyId` cannot be resolved, return 400 or 401 and do not call `getPlatformClient` or Fynd APIs.
+1. **Mount before FDK:** Routes receiving external callbacks must be mounted **before** `fdkHandler`. Otherwise the FDK catch-all consumes the request.
 
-3. **Use getPlatformClient(companyId):** After resolving `companyId`, call `const platformClient = await fdkExtension.getPlatformClient(companyId)`. If the result is null or throws, return 401 or 400 (e.g. company not authenticated); do not proceed with platform calls.
+2. **Verify authenticity:** If the external service supports HMAC signatures, API key headers, or IP allowlisting, verify before processing. See [security.md](security.md) for the HMAC pattern.
 
-4. **Return 200 on success:** Return 200 (and optionally a JSON body) after processing so the external system does not retry unnecessarily. Use appropriate 4xx/5xx for failures.
+3. **Resolve companyId first:** Before calling Fynd APIs, resolve `companyId` from the payload, header, or a stored mapping in your DB. If unresolvable, return 400.
 
-## Context (reference)
+4. **Use getPlatformClient(companyId):** After resolving company, `await fdkExtension.getPlatformClient(companyId)`. If null or throws, return 401.
 
-- **Resolving companyId:** From a header (e.g. `x-company-id`), from the request body, or from your DB (e.g. a mapping stored when handling an outbound Fynd webhook). The extension must have a deterministic way to know which Fynd company an inbound webhook belongs to.
+5. **Return 200 on success:** Return 200 after processing so the external system does not retry. Use 4xx/5xx for genuine failures.
+
+## Context
+
+- **Resolving companyId for inbound webhooks:** From a header (`x-company-id`), the request body, or a mapping stored in your DB when handling a prior Fynd webhook. The extension needs a deterministic way to map external callbacks to Fynd companies.
+- **Common pattern:** When Fynd sends an outbound webhook, store a `{ external_ref, fynd_company_id }` mapping. When the external service calls back, look up `fynd_company_id` by `external_ref`.
